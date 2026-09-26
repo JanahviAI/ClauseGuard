@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClauseGuard Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style type="text/css">
+        #network-graph {
+            width: 100%;
+            height: 300px;
+            border: 1px solid lightgray;
+            background-color: #f9fafb;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans p-6">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 border-b pb-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-indigo-700">ClauseGuard</h1>
+                <p class="text-gray-500">Privacy Portfolio Dashboard</p>
+            </div>
+            <div class="text-xs text-gray-400 bg-gray-100 p-2 rounded border">MOCK/DEV MODE COMPATIBLE</div>
+        </header>
+
+        <!-- Error Banner -->
+        <div id="error-banner" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+            <strong class="font-bold">Error!</strong>
+            <span id="error-message" class="block sm:inline">Something went wrong.</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Portfolio Section -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Current Portfolio</h2>
+                <div class="mb-4">
+                    <span class="text-sm text-gray-500 uppercase tracking-wide">Portfolio Risk Score</span>
+                    <div id="portfolio-risk" class="text-4xl font-bold text-indigo-600">0.0</div>
+                </div>
+                
+                <h3 class="font-semibold text-lg mt-6 mb-2">Services in Portfolio</h3>
+                <ul id="service-list" class="space-y-3">
+                    <li class="text-gray-500 italic">Loading services...</li>
+                </ul>
+            </div>
+
+            <!-- Entities & Overlap Section -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Privacy Entities</h2>
+                <div class="mb-4">
+                    <span class="text-sm text-gray-500 uppercase tracking-wide">Total Entities Tracked</span>
+                    <div id="total-entities" class="text-2xl font-bold text-gray-700">0</div>
+                </div>
+                
+                <h3 class="font-semibold text-lg mt-6 mb-2">Entity Overlap Graph</h3>
+                <div id="network-graph" class="rounded"></div>
+                <div class="mt-2 text-xs text-gray-500">Legend: <span class="text-blue-600 font-bold">Blue</span> = Service, <span class="text-green-600 font-bold">Green</span> = Canonical Entity</div>
+            </div>
+        </div>
+
+        <!-- Candidate Comparator Section (Side-by-side) -->
+        <div class="mt-8 bg-white rounded-lg shadow p-6 border-t-4 border-indigo-500">
+            <h2 class="text-2xl font-semibold mb-4">Two-Service Marginal Risk Comparator</h2>
+            <p class="text-gray-600 mb-4">Evaluate two candidate services independently against the existing portfolio side by side.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Candidate A -->
+                <div class="p-4 border rounded bg-gray-50">
+                    <h3 class="font-bold mb-2">Candidate A</h3>
+                    <select id="cand-a-select" class="block w-full p-2 border rounded border-gray-300 mb-2 bg-white">
+                        <option value="">-- Select --</option>
+                        <option value="google">Google (Heavy Data)</option>
+                        <option value="signal">Signal (Minimal Data)</option>
+                    </select>
+                </div>
+                <!-- Candidate B -->
+                <div class="p-4 border rounded bg-gray-50">
+                    <h3 class="font-bold mb-2">Candidate B</h3>
+                    <select id="cand-b-select" class="block w-full p-2 border rounded border-gray-300 mb-2 bg-white">
+                        <option value="">-- Select --</option>
+                        <option value="google">Google (Heavy Data)</option>
+                        <option value="signal">Signal (Minimal Data)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <button id="compare-btn" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700 transition">Compare Services</button>
+
+            <!-- Results Panel (Hidden by default) -->
+            <div id="candidate-results" class="hidden mt-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Result A -->
+                    <div class="bg-white p-5 rounded shadow-sm border border-gray-200">
+                        <h3 class="text-xl font-bold mb-4 border-b pb-2"><span id="name-a" class="text-indigo-600">Candidate A</span></h3>
+                        <div class="mb-4">
+                            <div class="text-sm text-gray-500 uppercase tracking-wide">Candidate Risk</div>
+                            <div id="risk-a" class="text-3xl font-bold text-gray-800">0.0</div>
+                        </div>
+                        <div class="mb-4">
+                            <div class="text-sm text-gray-500 uppercase tracking-wide">Marginal Risk Delta</div>
+                            <div id="delta-a" class="text-2xl font-bold text-red-600">0.0</div>
+                        </div>
+                        <h4 class="font-semibold text-orange-600 border-b pb-1 mb-2 mt-4 text-sm">Overlapping Entities</h4>
+                        <ul id="overlap-a" class="list-disc pl-5 text-sm space-y-1 mb-4"></ul>
+                        <h4 class="font-semibold text-red-600 border-b pb-1 mb-2 text-sm">Newly Introduced Entities</h4>
+                        <ul id="new-a" class="list-disc pl-5 text-sm space-y-1"></ul>
+                    </div>
+
+                    <!-- Result B -->
+                    <div class="bg-white p-5 rounded shadow-sm border border-gray-200">
+                        <h3 class="text-xl font-bold mb-4 border-b pb-2"><span id="name-b" class="text-indigo-600">Candidate B</span></h3>
+                        <div class="mb-4">
+                            <div class="text-sm text-gray-500 uppercase tracking-wide">Candidate Risk</div>
+                            <div id="risk-b" class="text-3xl font-bold text-gray-800">0.0</div>
+                        </div>
+                        <div class="mb-4">
+                            <div class="text-sm text-gray-500 uppercase tracking-wide">Marginal Risk Delta</div>
+                            <div id="delta-b" class="text-2xl font-bold text-red-600">0.0</div>
+                        </div>
+                        <h4 class="font-semibold text-orange-600 border-b pb-1 mb-2 mt-4 text-sm">Overlapping Entities</h4>
+                        <ul id="overlap-b" class="list-disc pl-5 text-sm space-y-1 mb-4"></ul>
+                        <h4 class="font-semibold text-red-600 border-b pb-1 mb-2 text-sm">Newly Introduced Entities</h4>
+                        <ul id="new-b" class="list-disc pl-5 text-sm space-y-1"></ul>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MOCK_FIXTURES = {
+            "google": {
+                "service_name": "Google",
+                "clauses": [
+                    {
+                        "text": "We use your location data to provide local search results.",
+                        "entities": ["Location"],
+                        "severity_score": 3.0,
+                        "specificity_score": 2.0,
+                        "risk_category": "Location Tracking"
+                    },
+                    {
+                        "text": "We track IP addresses to prevent abuse.",
+                        "entities": ["IP Address"],
+                        "severity_score": 4.0,
+                        "specificity_score": 2.0,
+                        "risk_category": "Security"
+                    },
+                    {
+                        "text": "Your email address is required.",
+                        "entities": ["Email"],
+                        "severity_score": 2.0,
+                        "specificity_score": 1.0,
+                        "risk_category": "Account Data"
+                    }
+                ]
+            },
+            "signal": {
+                "service_name": "Signal",
+                "clauses": [
+                    {
+                        "text": "Your phone number is used for registration.",
+                        "entities": ["Phone Number"],
+                        "severity_score": 1.0,
+                        "specificity_score": 1.0,
+                        "risk_category": "Account Data"
+                    }
+                ]
+            }
+        };
+
+        function showError(msg) {
+            document.getElementById('error-message').innerText = msg;
+            document.getElementById('error-banner').classList.remove('hidden');
+        }
+        function hideError() { document.getElementById('error-banner').classList.add('hidden'); }
+
+        async function loadPortfolio() {
+            try {
+                const response = await fetch('/api/portfolio');
+                if (!response.ok) throw new Error('Failed to load portfolio');
+                const data = await response.json();
+                renderPortfolio(data);
+                loadGraph();
+            } catch (error) { showError(error.message); }
+        }
+
+        async function loadGraph() {
+            try {
+                const response = await fetch('/api/overlap-graph');
+                if (!response.ok) throw new Error('Failed to load graph data');
+                const data = await response.json();
+                
+                // Vis.js dataset conversion
+                const visNodes = new vis.DataSet(
+                    data.nodes.map(n => ({
+                        id: n.id, 
+                        label: n.id, 
+                        color: n.group === 'service' ? '#93c5fd' : '#bbf7d0', // blue for service, green for entity
+                        shape: n.group === 'service' ? 'box' : 'ellipse'
+                    }))
+                );
+                const visEdges = new vis.DataSet(
+                    data.edges.map(e => ({ from: e.source, to: e.target }))
+                );
+                
+                document.getElementById('total-entities').innerText = data.nodes.filter(n => n.group==='entity').length;
+
+                const container = document.getElementById('network-graph');
+                const graphData = { nodes: visNodes, edges: visEdges };
+                const options = { physics: { stabilization: true } };
+                new vis.Network(container, graphData, options);
+
+            } catch(e) { console.error("Graph error", e); }
+        }
+
+        function renderPortfolio(data) {
+            document.getElementById('portfolio-risk').innerText = data.portfolio_score.toFixed(1);
+            const serviceList = document.getElementById('service-list');
+            serviceList.innerHTML = '';
+            if (data.services.length === 0) {
+                serviceList.innerHTML = '<li class="text-gray-500 italic">Portfolio is empty.</li>';
+            } else {
+                data.services.forEach(s => {
+                    serviceList.innerHTML += `<li class="bg-gray-50 p-3 rounded border border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <strong class="text-lg">${s.service_name}</strong>
+                            <span class="bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded">Risk: ${s.service_score.toFixed(1)}</span>
+                        </div>
+                        <div class="text-sm text-gray-600">Entities: ${s.entities.length}</div>
+                    </li>`;
+                });
+            }
+        }
+
+        function renderCandidateResult(suffix, data, fixture) {
+            document.getElementById(`name-${suffix}`).innerText = fixture.service_name;
+            document.getElementById(`risk-${suffix}`).innerText = data.candidate_service_risk.toFixed(1);
+            document.getElementById(`delta-${suffix}`).innerText = data.marginal_risk_delta.toFixed(1);
+            
+            const ulOverlap = document.getElementById(`overlap-${suffix}`);
+            ulOverlap.innerHTML = data.overlapping_entities.length ? 
+                data.overlapping_entities.map(e => `<li>${e}</li>`).join('') : '<li class="text-gray-400 italic">None</li>';
+            
+            const ulNew = document.getElementById(`new-${suffix}`);
+            ulNew.innerHTML = data.newly_introduced_entities.length ? 
+                data.newly_introduced_entities.map(e => `<li>${e}</li>`).join('') : '<li class="text-gray-400 italic">None</li>';
+        }
+
+        document.getElementById('compare-btn').addEventListener('click', async () => {
+            hideError();
+            const valA = document.getElementById('cand-a-select').value;
+            const valB = document.getElementById('cand-b-select').value;
+            
+            if (!valA || !valB) {
+                showError("Please select both candidates.");
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/compare-services', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        candidate_a: MOCK_FIXTURES[valA],
+                        candidate_b: MOCK_FIXTURES[valB]
+                    })
+                });
+                if (!response.ok) throw new Error('Comparison failed');
+                const result = await response.json();
+                
+                renderCandidateResult('a', result.candidate_a, MOCK_FIXTURES[valA]);
+                renderCandidateResult('b', result.candidate_b, MOCK_FIXTURES[valB]);
+                
+                document.getElementById('candidate-results').classList.remove('hidden');
+            } catch (error) { showError(error.message); }
+        });
+
+        loadPortfolio();
+    </script>
+</body>
+</html>

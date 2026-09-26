@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ClauseGuard</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <h1>ClauseGuard</h1>
+    <p>Privacy Policy Analyzer</p>
+  </div>
+  
+  <div class="content">
+    <div id="website-info">
+      <strong>Website:</strong> <span id="site-name">Loading...</span>
+    </div>
+
+    <button id="analyze-btn" class="btn">Analyze Policy</button>
+
+    <div id="status" class="status hidden"></div>
+
+    <div id="results" class="hidden">
+      <div class="risk-section">
+        <h3>Privacy Risk</h3>
+        <div id="risk-score" class="risk-score">0.0</div>
+      </div>
+      
+      <div class="mode-indicator" id="mode-indicator">
+        Mode: <span id="api-mode">UNKNOWN</span>
+      </div>
+
+      <div class="entities-section">
+        <h3>Detected Data:</h3>
+        <ul id="entities-list"></ul>
+      </div>
+
+      <div class="clauses-summary">
+        <p>Clauses extracted: <span id="clause-count">0</span></p>
+        <button id="toggle-clauses-btn" class="btn-small">View Details</button>
+      </div>
+
+      <div id="clauses-details" class="hidden">
+        <!-- Clauses injected here -->
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
