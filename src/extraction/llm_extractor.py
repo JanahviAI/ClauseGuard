@@ -1152,14 +1152,19 @@ class LLMExtractor:
     @staticmethod
     def _infer_retention(text):
         lower = text.lower()
-        match = re.search(
-            r"(\d+)\s*(day|days|month|months|year|years)",
-            lower,
-        )
+        tokens = lower.replace(",", " ").replace(".", " ").split()
+        match = None
+        for idx, token in enumerate(tokens[:-1]):
+            if not token.isdigit():
+                continue
+            unit = tokens[idx + 1]
+            if unit in {"day", "days", "month", "months", "year", "years"}:
+                match = (int(token), unit)
+                break
+
         duration_days = None
         if match:
-            value = int(match.group(1))
-            unit = match.group(2)
+            value, unit = match
             if unit.startswith("day"):
                 duration_days = value
             elif unit.startswith("month"):
@@ -1172,7 +1177,7 @@ class LLMExtractor:
         elif "until" in lower and "delete" in lower:
             raw = "until account deletion"
         elif match:
-            raw = match.group(0)
+            raw = f"{match[0]} {match[1]}"
         else:
             raw = ""
 

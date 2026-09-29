@@ -16,6 +16,10 @@ from src.config import get_provider, get_model
 
 app = Flask(__name__, static_folder='static')
 
+def _internal_server_error(public_message, exc):
+    logging.exception(public_message, exc_info=exc)
+    return jsonify({"error": public_message}), 500
+
 # Minimal CORS for extension development
 @app.after_request
 def add_cors_headers(response):
@@ -44,7 +48,7 @@ def get_portfolio():
         data["repeated_entities"] = repeated
         return jsonify(data)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _internal_server_error("Failed to load portfolio data.", e)
 
 @app.route('/api/marginal-risk', methods=['POST'])
 def calculate_marginal_risk():
@@ -60,7 +64,7 @@ def calculate_marginal_risk():
         result = engine.calculate_marginal_risk(candidate)
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _internal_server_error("Failed to calculate marginal risk.", e)
 
 @app.route('/api/analyze-policy', methods=['POST', 'OPTIONS'])
 def analyze_policy():
@@ -125,7 +129,7 @@ def analyze_policy():
         
     except Exception as e:
         logging.error(f"Analysis failed: {e}")
-        return jsonify({"error": f"Extraction failed: {str(e)}"}), 500
+        return _internal_server_error("Extraction failed.", e)
 
 @app.route('/api/submit-policy', methods=['POST'])
 def submit_policy():
@@ -151,7 +155,7 @@ def submit_policy():
             "clauses_loaded": len(payload.get("clauses", [])),
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _internal_server_error("Failed to store policy in portfolio.", e)
 
 @app.route('/api/service/<service_name>', methods=['GET'])
 def get_service_detail(service_name):
@@ -256,7 +260,7 @@ def get_overlap_graph():
             "edges": list(unique_edges)
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _internal_server_error("Failed to load overlap graph data.", e)
 
 @app.route('/api/compare-services', methods=['POST'])
 def compare_services():
@@ -276,7 +280,7 @@ def compare_services():
             "candidate_b": res_b
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _internal_server_error("Failed to compare candidate services.", e)
 
 @app.route('/')
 def serve_index():
