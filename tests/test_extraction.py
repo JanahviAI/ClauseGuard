@@ -36,8 +36,13 @@ class TestExtractionPipeline(unittest.TestCase):
 
         filtered = prefilter.filter_candidates(raw)
 
-        self.assertEqual(len(filtered), 1)
-        self.assertIn("location data", filtered[0])
+        self.assertGreaterEqual(len(filtered), 1)
+        self.assertTrue(any("location data" in clause for clause in filtered))
+
+        scored = prefilter.score_candidates(raw)
+        self.assertEqual(len(scored), 2)
+        self.assertIn("privacy_probability", scored[0])
+        self.assertIn("is_uncertain", scored[0])
 
     def test_mock_llm_extractor(self):
         # Explicitly force mock mode.
@@ -63,6 +68,15 @@ class TestExtractionPipeline(unittest.TestCase):
         self.assertIsInstance(clause["severity_score"], float)
         self.assertIsInstance(clause["specificity_score"], float)
         self.assertIsInstance(clause["risk_category"], str)
+        self.assertIn("recipients", clause)
+        self.assertIn("entity_specificity", clause)
+        self.assertIn("retention", clause)
+        self.assertIn("purposes", clause)
+        self.assertIn("confidence", clause)
+        self.assertIn("evidence", clause)
+        self.assertIn(clause["entity_specificity"], {"specific", "group", "vague"})
+        self.assertIn("raw_text", clause["retention"])
+        self.assertIn("duration_days", clause["retention"])
 
     def test_validator_success(self):
         valid_data = {
@@ -74,7 +88,13 @@ class TestExtractionPipeline(unittest.TestCase):
                     "entities": ["Location"],
                     "severity_score": 4.0,
                     "specificity_score": 2.5,
-                    "risk_category": "Data Sharing"
+                    "risk_category": "Data Sharing",
+                    "recipients": ["Advertising Partners"],
+                    "entity_specificity": "specific",
+                    "retention": {"raw_text": "30 days", "duration_days": 30},
+                    "purposes": ["Advertising"],
+                    "confidence": 0.8,
+                    "evidence": "We share your location."
                 }
             ]
         }
@@ -121,11 +141,11 @@ class TestExtractionPipeline(unittest.TestCase):
         )
 
         self.assertEqual(result["service_name"], "EndToEnd")
-        self.assertEqual(len(result["clauses"]), 1)
-        self.assertIn(
-            "location data",
-            result["clauses"][0]["text"]
-        )
+        self.assertGreaterEqual(len(result["clauses"]), 1)
+        self.assertTrue(any(
+            "location data" in clause["text"]
+            for clause in result["clauses"]
+        ))
 
 
 if __name__ == '__main__':

@@ -124,7 +124,12 @@ def extract_pipeline(raw_text, service_name, category=None):
     raw_clauses = split_policy_into_clauses(raw_text)
 
     prefilter = PrivacyPrefilter()
-    candidate_clauses = prefilter.filter_candidates(raw_clauses)
+    scored_clauses = prefilter.score_candidates(raw_clauses)
+    candidate_clauses = [
+        item["clause"]
+        for item in scored_clauses
+        if item["is_privacy"] or item["is_uncertain"]
+    ]
 
     extractor = LLMExtractor(
         service_name=service_name.strip(),

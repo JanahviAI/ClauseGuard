@@ -56,6 +56,7 @@ class TestDashboardAPI(unittest.TestCase):
         self.assertEqual(data["portfolio_score"], 6.0)
         self.assertEqual(len(data["services"]), 1)
         self.assertEqual(data["services"][0]["service_name"], "TestService")
+        self.assertIn("repeated_entities", data)
 
     def test_marginal_risk(self):
         candidate = {
@@ -144,6 +145,38 @@ class TestDashboardAPI(unittest.TestCase):
     def test_compare_services_invalid_json(self):
         response = self.app.post('/api/compare-services', json={"bad": "data"})
         self.assertEqual(response.status_code, 400)
+
+    def test_submit_policy_and_service_drilldown(self):
+        payload = {
+            "service_name": "StoredService",
+            "category": "Test",
+            "clauses": [
+                {
+                    "text": "We retain email for 30 days for support.",
+                    "entities": ["Email"],
+                    "recipients": ["Service Providers"],
+                    "severity_score": 3.0,
+                    "specificity_score": 3.0,
+                    "risk_category": "Retention",
+                    "entity_specificity": "specific",
+                    "retention": {"raw_text": "30 days", "duration_days": 30},
+                    "purposes": ["Customer Support"],
+                    "confidence": 0.9,
+                    "evidence": "retain email for 30 days"
+                }
+            ]
+        }
+        save_response = self.app.post('/api/submit-policy', json=payload)
+        self.assertEqual(save_response.status_code, 200)
+
+        detail_response = self.app.get('/api/service/StoredService')
+        self.assertEqual(detail_response.status_code, 200)
+        detail = json.loads(detail_response.data)
+        self.assertEqual(detail["service_name"], "StoredService")
+        self.assertEqual(len(detail["clauses"]), 1)
+        clause = detail["clauses"][0]
+        self.assertEqual(clause["retention"]["duration_days"], 30)
+        self.assertIn("Customer Support", clause["purposes"])
 
 if __name__ == '__main__':
     unittest.main()

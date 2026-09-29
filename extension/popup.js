@@ -75,6 +75,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             showStatus("Sending to ClauseGuard backend...", "info");
                         }
 
+                        if (!response.policy_detected) {
+                            showStatus("This page may not be a privacy policy/ToS. Analysis will continue.", "warning");
+                        }
+
                         // Artificial delay to let the audience read "Sending to backend..."
                         setTimeout(() => {
                             sendToBackend(response);
@@ -95,7 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     text: data.text,
                     url: data.url,
-                    title: data.title
+                    title: data.title,
+                    policy_detected: Boolean(data.policy_detected)
                 })
             });
 
