@@ -5,6 +5,7 @@ ClauseGuard is a local research prototype for analyzing privacy-policy clauses, 
 ## What is included
 
 - C1: TF-IDF/Logistic Regression privacy prefilter.
+- C1: Deterministic uncertainty-aware prefilter (`LR positive OR uncertain`) before LLM extraction.
 - C1: Structured LLM extraction with four modes:
   - `mock` — deterministic, offline, no key required.
   - `ollama` — local LLM, no cloud API key required.
@@ -19,6 +20,9 @@ ClauseGuard is a local research prototype for analyzing privacy-policy clauses, 
 - Flask API and dashboard.
 - Chrome extension.
 - Evaluation utilities and regression tests.
+- Clause schema fields for each extracted clause:
+  `risk_category`, `severity_score`, `entities`, `recipients`,
+  `entity_specificity`, `retention`, `purposes`, `confidence`, `evidence`.
 - End-to-end demo that uses a temporary database and never modifies the real portfolio DB.
 
 ## Requirements
@@ -166,8 +170,10 @@ http://127.0.0.1:5000
 Available API routes include:
 
 - `GET /api/portfolio`
+- `GET /api/service/<service_name>`
 - `GET /api/overlap-graph`
 - `POST /api/analyze-policy`
+- `POST /api/submit-policy`
 - `POST /api/marginal-risk`
 - `POST /api/compare-services`
 

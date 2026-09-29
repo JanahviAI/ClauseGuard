@@ -34,6 +34,7 @@ class TestExtensionAPI(unittest.TestCase):
         self.assertIn("canonical_entities", data)
         self.assertIn("risk", data)
         self.assertEqual(data["policy_url"], "https://example.com/privacy")
+        self.assertIn("policy_detected", data)
 
     def test_analyze_policy_service_name_fallback(self):
         payload = {

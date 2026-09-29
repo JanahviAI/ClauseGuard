@@ -40,9 +40,34 @@ def init_db(db_path="data/db/portfolio.db"):
             severity_score REAL,
             specificity_score REAL,
             risk_category TEXT,
+            recipients_json TEXT,
+            entity_specificity TEXT,
+            retention_raw TEXT,
+            retention_days REAL,
+            purposes_json TEXT,
+            confidence REAL,
+            evidence TEXT,
             FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
         )
     """)
+
+    # Backward-compatible migration for older DB files.
+    cursor.execute("PRAGMA table_info(clauses)")
+    clause_columns = {row[1] for row in cursor.fetchall()}
+    missing_columns = {
+        "recipients_json": "TEXT",
+        "entity_specificity": "TEXT",
+        "retention_raw": "TEXT",
+        "retention_days": "REAL",
+        "purposes_json": "TEXT",
+        "confidence": "REAL",
+        "evidence": "TEXT",
+    }
+    for column_name, column_type in missing_columns.items():
+        if column_name not in clause_columns:
+            cursor.execute(
+                f"ALTER TABLE clauses ADD COLUMN {column_name} {column_type}"
+            )
     
     # 4. Clause to Entity Mapping table
     cursor.execute("""

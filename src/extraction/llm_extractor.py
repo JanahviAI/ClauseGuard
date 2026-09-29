@@ -348,7 +348,11 @@ class LLMExtractor:
                     f"Unsupported provider: {self.provider}"
                 )
 
-            results.extend(parsed.get("clauses", []))
+            normalized = [
+                self._finalize_clause(clause)
+                for clause in parsed.get("clauses", [])
+            ]
+            results.extend(normalized)
 
         return {
             "service_name": self.service_name,
@@ -422,12 +426,47 @@ class LLMExtractor:
             if not entities:
                 entities.append("General Personal Data")
 
+            recipients = []
+            if any(
+                keyword in lower
+                for keyword in (
+                    "share",
+                    "third party",
+                    "partner",
+                    "provider",
+                    "affiliate",
+                )
+            ):
+                recipients = [
+                    entity
+                    for entity in entities
+                    if any(
+                        marker in entity.lower()
+                        for marker in (
+                            "partner",
+                            "provider",
+                            "third",
+                            "google",
+                            "meta",
+                            "amazon",
+                            "apple",
+                            "microsoft",
+                        )
+                    )
+                ]
+
             extracted.append({
                 "text": text,
                 "entities": entities,
                 "severity_score": float(3 + (i % 3)),
                 "specificity_score": float(2 + (i % 2)),
                 "risk_category": "Mock Category",
+                "recipients": recipients,
+                "entity_specificity": self._infer_entity_specificity(text, entities),
+                "retention": self._infer_retention(text),
+                "purposes": self._infer_purposes(text),
+                "confidence": 0.78,
+                "evidence": text[:220],
             })
 
         return {"clauses": extracted}
@@ -549,12 +588,18 @@ class LLMExtractor:
             },
         }
 
+        api_key = os.environ.get("OPENAI_API_KEY")
+
+        if not api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set in the environment."
+            )
+
         body = self._http_json(
             "https://api.openai.com/v1/chat/completions",
             payload,
             {
-                "Authorization":
-                    f"Bearer {os.environ['OPENAI_API_KEY']}"
+                "Authorization": "Bearer " + api_key
             },
         )
 
@@ -1061,6 +1106,154 @@ class LLMExtractor:
         return cleaned
 
     @staticmethod
+    def _infer_recipients_from_entities(entities):
+        recipient_markers = (
+            "partner",
+            "provider",
+            "network",
+            "company",
+            "google",
+            "meta",
+            "amazon",
+            "apple",
+            "microsoft",
+            "third parties",
+            "service providers",
+        )
+        recipients = []
+        for entity in entities:
+            if not isinstance(entity, str):
+                continue
+            lower = entity.lower()
+            if any(marker in lower for marker in recipient_markers):
+                recipients.append(entity)
+
+        deduped = []
+        for recipient in recipients:
+            if recipient not in deduped:
+                deduped.append(recipient)
+        return deduped
+
+    @staticmethod
+    def _infer_entity_specificity(text, entities):
+        if entities and any(
+            len(entity.split()) >= 2
+            for entity in entities
+            if isinstance(entity, str)
+        ):
+            return "specific"
+
+        lower = text.lower()
+        if any(token in lower for token in ("third party", "partners", "affiliates", "providers")):
+            return "group"
+
+        return "vague"
+
+    @staticmethod
+    def _infer_retention(text):
+        lower = text.lower()
+        match = re.search(
+            r"(\d+)\s*(day|days|month|months|year|years)",
+            lower,
+        )
+        duration_days = None
+        if match:
+            value = int(match.group(1))
+            unit = match.group(2)
+            if unit.startswith("day"):
+                duration_days = value
+            elif unit.startswith("month"):
+                duration_days = value * 30
+            elif unit.startswith("year"):
+                duration_days = value * 365
+
+        if "as long as necessary" in lower or "as long as required" in lower:
+            raw = "as long as necessary"
+        elif "until" in lower and "delete" in lower:
+            raw = "until account deletion"
+        elif match:
+            raw = match.group(0)
+        else:
+            raw = ""
+
+        return {
+            "raw_text": raw,
+            "duration_days": duration_days,
+        }
+
+    @staticmethod
+    def _infer_purposes(text):
+        lower = text.lower()
+        mapping = {
+            "advertis": "Advertising",
+            "market": "Marketing",
+            "security": "Security",
+            "fraud": "Fraud Prevention",
+            "analytics": "Analytics",
+            "improve": "Service Improvement",
+            "support": "Customer Support",
+            "legal": "Legal Compliance",
+            "payment": "Payments",
+            "personaliz": "Personalization",
+        }
+        purposes = []
+        for needle, label in mapping.items():
+            if needle in lower and label not in purposes:
+                purposes.append(label)
+        return purposes
+
+    @staticmethod
+    def _finalize_clause(clause):
+        text = clause.get("text", "")
+        entities = clause.get("entities", [])
+        if not isinstance(entities, list):
+            entities = []
+            clause["entities"] = entities
+
+        recipients = clause.get("recipients")
+        if not isinstance(recipients, list):
+            recipients = LLMExtractor._infer_recipients_from_entities(entities)
+
+        entity_specificity = clause.get("entity_specificity")
+        if entity_specificity not in {"specific", "group", "vague"}:
+            entity_specificity = LLMExtractor._infer_entity_specificity(text, entities)
+
+        retention = clause.get("retention")
+        if not isinstance(retention, dict):
+            retention = LLMExtractor._infer_retention(text)
+        retention.setdefault("raw_text", "")
+        retention.setdefault("duration_days", None)
+
+        purposes = clause.get("purposes")
+        if not isinstance(purposes, list):
+            purposes = LLMExtractor._infer_purposes(text)
+        else:
+            purposes = [
+                purpose.strip()
+                for purpose in purposes
+                if isinstance(purpose, str) and purpose.strip()
+            ]
+
+        confidence = clause.get("confidence", 0.75)
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            confidence = 0.75
+        confidence = max(0.0, min(1.0, confidence))
+
+        evidence = clause.get("evidence")
+        if not isinstance(evidence, str) or not evidence.strip():
+            evidence = text[:220]
+
+        clause["recipients"] = recipients
+        clause["entity_specificity"] = entity_specificity
+        clause["retention"] = retention
+        clause["purposes"] = purposes
+        clause["confidence"] = confidence
+        clause["evidence"] = evidence
+        return clause
+
+    @staticmethod
     def _parse_model_json(content):
         content = content.strip()
 
@@ -1163,16 +1356,18 @@ class LLMExtractor:
             semantic_entities = []
 
             for entity in clause["entities"]:
-
-                if not isinstance(entity, dict):
+                if isinstance(entity, str):
+                    name = entity
+                    privacy_relevant = True
+                elif isinstance(entity, dict):
+                    name = entity.get("name")
+                    privacy_relevant = entity.get(
+                        "privacy_relevant"
+                    )
+                else:
                     raise RuntimeError(
                         f"LLM returned invalid entity at clause {i}."
                     )
-
-                name = entity.get("name")
-                privacy_relevant = entity.get(
-                    "privacy_relevant"
-                )
 
                 if (
                     not isinstance(name, str)
@@ -1183,10 +1378,7 @@ class LLMExtractor:
                         f"at clause {i}."
                     )
 
-                if not isinstance(
-                    privacy_relevant,
-                    bool
-                ):
+                if not isinstance(privacy_relevant, bool):
                     raise RuntimeError(
                         f"LLM returned invalid privacy_relevant "
                         f"value at clause {i}."

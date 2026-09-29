@@ -15,11 +15,30 @@ function extractPageText() {
         text = text.substring(0, MAX_LENGTH);
     }
 
+    const lowerUrl = window.location.href.toLowerCase();
+    const lowerTitle = (document.title || "").toLowerCase();
+    const lowerPreview = text.slice(0, 5000).toLowerCase();
+
+    const policySignals = [
+        "privacy",
+        "terms",
+        "policy",
+        "gdpr",
+        "cookie",
+        "data processing",
+    ];
+
+    const signalHits = policySignals.filter(
+        token => lowerUrl.includes(token) || lowerTitle.includes(token) || lowerPreview.includes(token)
+    );
+
     return {
         text: text,
         url: window.location.href,
         title: document.title,
-        truncated: truncated
+        truncated: truncated,
+        policy_detected: signalHits.length > 0,
+        policy_signal_hits: signalHits
     };
 }
 

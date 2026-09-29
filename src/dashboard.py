@@ -1,6 +1,8 @@
 import os
 import sys
 import logging
+import json
+import sqlite3
 from flask import Flask, request, jsonify, send_from_directory
 
 # Ensure project root is in path
@@ -32,6 +34,14 @@ def get_portfolio():
     engine = ScoringEngine()
     try:
         data = engine.get_portfolio_data(DB_PATH)
+        concentration = data.get("breakdown", {}).get("concentration_by_entity", {})
+        repeated = [
+            {"entity": name, "service_count": count}
+            for name, count in concentration.items()
+            if count > 1
+        ]
+        repeated.sort(key=lambda item: item["service_count"], reverse=True)
+        data["repeated_entities"] = repeated
         return jsonify(data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -67,6 +77,7 @@ def analyze_policy():
         
     url = data.get("url", "")
     title = data.get("title", "")
+    policy_detected = bool(data.get("policy_detected", False))
     
     # Simple service name extraction fallback
     service_name = title.split('-')[0].strip() if title else ""
@@ -107,13 +118,107 @@ def analyze_policy():
             "clauses": extracted.get("clauses", []),
             "canonical_entities": sorted(list(all_canonical_entities)),
             "risk": risk,
-            "policy_url": url
+            "policy_url": url,
+            "policy_detected": policy_detected,
         }
         return jsonify(response_data)
         
     except Exception as e:
         logging.error(f"Analysis failed: {e}")
         return jsonify({"error": f"Extraction failed: {str(e)}"}), 500
+
+@app.route('/api/submit-policy', methods=['POST'])
+def submit_policy():
+    payload = request.json or {}
+    if "service_name" not in payload or "clauses" not in payload:
+        return jsonify({"error": "Payload must include service_name and clauses"}), 400
+
+    try:
+        from src.db import init_db
+        from src.canonicalize import DatabaseLoader
+    except ImportError:
+        from db import init_db
+        from canonicalize import DatabaseLoader
+
+    try:
+        init_db(DB_PATH)
+        canonicalizer = EntityCanonicalizer()
+        loader = DatabaseLoader(DB_PATH)
+        loader.load_extraction(payload, canonicalizer)
+        return jsonify({
+            "status": "stored",
+            "service_name": payload.get("service_name"),
+            "clauses_loaded": len(payload.get("clauses", [])),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/service/<service_name>', methods=['GET'])
+def get_service_detail(service_name):
+    if not os.path.exists(DB_PATH):
+        return jsonify({"error": "Portfolio database not found"}), 404
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, name, category FROM services WHERE name = ?", (service_name,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Service not found"}), 404
+
+    service_id = row["id"]
+    cursor.execute(
+        """
+        SELECT id, text, severity_score, specificity_score, risk_category,
+               recipients_json, entity_specificity, retention_raw,
+               retention_days, purposes_json, confidence, evidence
+        FROM clauses
+        WHERE service_id = ?
+        """,
+        (service_id,),
+    )
+    clause_rows = cursor.fetchall()
+
+    clause_payload = []
+    for clause in clause_rows:
+        clause_id = clause["id"]
+        cursor.execute(
+            """
+            SELECT ce.name
+            FROM canonical_entities ce
+            JOIN clause_entity_mapping cem ON cem.entity_id = ce.id
+            WHERE cem.clause_id = ?
+            """,
+            (clause_id,),
+        )
+        entities = [entity_row[0] for entity_row in cursor.fetchall()]
+
+        clause_payload.append({
+            "text": clause["text"],
+            "severity_score": clause["severity_score"],
+            "specificity_score": clause["specificity_score"],
+            "risk_category": clause["risk_category"],
+            "entities": entities,
+            "recipients": json.loads(clause["recipients_json"] or "[]"),
+            "entity_specificity": clause["entity_specificity"],
+            "retention": {
+                "raw_text": clause["retention_raw"] or "",
+                "duration_days": clause["retention_days"],
+            },
+            "purposes": json.loads(clause["purposes_json"] or "[]"),
+            "confidence": clause["confidence"],
+            "evidence": clause["evidence"] or "",
+        })
+
+    conn.close()
+
+    return jsonify({
+        "service_name": row["name"],
+        "category": row["category"],
+        "clauses": clause_payload,
+    })
 
 @app.route('/api/overlap-graph', methods=['GET'])
 def get_overlap_graph():

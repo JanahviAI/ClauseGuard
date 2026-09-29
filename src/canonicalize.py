@@ -552,6 +552,20 @@ class DatabaseLoader:
                 severity = clause.get("severity_score")
                 specificity = clause.get("specificity_score")
                 risk_category = clause.get("risk_category")
+                recipients_json = json.dumps(
+                    clause.get("recipients", []),
+                    ensure_ascii=False,
+                )
+                entity_specificity = clause.get("entity_specificity")
+                retention = clause.get("retention", {}) or {}
+                retention_raw = retention.get("raw_text", "")
+                retention_days = retention.get("duration_days")
+                purposes_json = json.dumps(
+                    clause.get("purposes", []),
+                    ensure_ascii=False,
+                )
+                confidence = clause.get("confidence")
+                evidence = clause.get("evidence", "")
 
                 cursor.execute(
                     "SELECT id FROM clauses WHERE service_id = ? AND text = ?",
@@ -567,12 +581,26 @@ class DatabaseLoader:
                         """UPDATE clauses
                            SET severity_score=?,
                                specificity_score=?,
-                               risk_category=?
+                               risk_category=?,
+                               recipients_json=?,
+                               entity_specificity=?,
+                               retention_raw=?,
+                               retention_days=?,
+                               purposes_json=?,
+                               confidence=?,
+                               evidence=?
                            WHERE id=?""",
                         (
                             severity,
                             specificity,
                             risk_category,
+                            recipients_json,
+                            entity_specificity,
+                            retention_raw,
+                            retention_days,
+                            purposes_json,
+                            confidence,
+                            evidence,
                             clause_id,
                         ),
                     )
@@ -581,14 +609,24 @@ class DatabaseLoader:
                     cursor.execute(
                         """INSERT INTO clauses
                            (service_id, text, severity_score,
-                            specificity_score, risk_category)
-                           VALUES (?, ?, ?, ?, ?)""",
+                            specificity_score, risk_category,
+                            recipients_json, entity_specificity,
+                            retention_raw, retention_days,
+                            purposes_json, confidence, evidence)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             service_id,
                             text,
                             severity,
                             specificity,
                             risk_category,
+                            recipients_json,
+                            entity_specificity,
+                            retention_raw,
+                            retention_days,
+                            purposes_json,
+                            confidence,
+                            evidence,
                         ),
                     )
 

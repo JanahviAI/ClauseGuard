@@ -5,7 +5,7 @@ import sys
 # Ensure project root is in path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from evaluation.metrics import calculate_metrics
+from evaluation.metrics import calculate_metrics, calculate_cohens_kappa
 
 class TestEvaluationMetrics(unittest.TestCase):
     
@@ -81,6 +81,18 @@ class TestEvaluationMetrics(unittest.TestCase):
         metrics2 = calculate_metrics(y_true, y_pred)
         
         self.assertEqual(metrics1, metrics2)
+
+    def test_cohens_kappa_perfect_agreement(self):
+        labels_a = [1, 0, 1, 0, 1]
+        labels_b = [1, 0, 1, 0, 1]
+        self.assertEqual(calculate_cohens_kappa(labels_a, labels_b), 1.0)
+
+    def test_cohens_kappa_partial_agreement(self):
+        labels_a = [1, 1, 0, 0]
+        labels_b = [1, 0, 0, 0]
+        kappa = calculate_cohens_kappa(labels_a, labels_b)
+        self.assertLess(kappa, 1.0)
+        self.assertGreaterEqual(kappa, -1.0)
 
 if __name__ == '__main__':
     unittest.main()
